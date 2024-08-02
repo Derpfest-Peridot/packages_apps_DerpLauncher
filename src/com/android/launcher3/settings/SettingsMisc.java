@@ -49,6 +49,7 @@ import androidx.preference.PreferenceFragmentCompat.OnPreferenceStartFragmentCal
 import androidx.preference.PreferenceFragmentCompat.OnPreferenceStartScreenCallback;
 import androidx.preference.PreferenceGroup.PreferencePositionCallback;
 import androidx.preference.PreferenceScreen;
+import androidx.preference.SwitchPreferenceCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.launcher3.LauncherAppState;
@@ -62,6 +63,8 @@ import com.android.launcher3.states.RotationHelper;
 import com.android.launcher3.util.DisplayController;
 import com.android.launcher3.util.Executors;
 import com.android.launcher3.util.SettingsCache;
+import com.android.quickstep.SystemUiProxy;
+import com.android.quickstep.util.AssistUtils;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 
@@ -91,6 +94,12 @@ public class SettingsMisc extends CollapsingToolbarBaseActivity
     public static final String SAVE_HIGHLIGHTED_KEY = "android:preference_highlighted";
 
     public static final String KEY_TRUST_APPS = "pref_trust_apps";
+
+    private static final String CTS_KEY = "pref_allow_cts";
+    private static boolean mContextualSearchDefValue;
+    private static boolean mCtsEnabled;
+
+    private static Context mContext;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,6 +138,9 @@ public class SettingsMisc extends CollapsingToolbarBaseActivity
             fm.beginTransaction().replace(
                     com.android.settingslib.collapsingtoolbar.R.id.content_frame, f).commit();
         }
+        mContext = getApplicationContext();
+        mContextualSearchDefValue = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_searchAllEntrypointsEnabledDefault);
         LauncherPrefs.getPrefs(getApplicationContext()).registerOnSharedPreferenceChangeListener(this);
     }
 
@@ -153,10 +165,17 @@ public class SettingsMisc extends CollapsingToolbarBaseActivity
     }
 
     @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) { 
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         switch (key) {
             case Utilities.KEY_BLUR_DEPTH:
                 LauncherAppState.getInstance(this).setNeedsRestart();
+                break;
+            case CTS_KEY:
+                mCtsEnabled = LauncherPrefs.getPrefs(mContext).getBoolean(CTS_KEY, mContextualSearchDefValue);
+                Settings.Secure.putInt(mContext.getContentResolver(),
+                        Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED, mCtsEnabled ? 1 : 0);
+                SystemUiProxy.INSTANCE.get(mContext).setAssistantOverridesRequested(
+                        AssistUtils.newInstance(mContext).getSysUiAssistOverrideInvocationTypes());
                 break;
             default:
                 break;
@@ -217,6 +236,8 @@ public class SettingsMisc extends CollapsingToolbarBaseActivity
         private String mHighLightKey;
         private boolean mPreferenceHighlighted = false;
 
+        private SwitchPreferenceCompat mCtsPref;
+
         @Override
         public void onCreate(@Nullable Bundle savedInstanceState) {
             if (Utilities.IS_DEBUG_DEVICE) {
@@ -250,6 +271,16 @@ public class SettingsMisc extends CollapsingToolbarBaseActivity
 
             if (getActivity() != null && !TextUtils.isEmpty(getPreferenceScreen().getTitle())) {
                 getActivity().setTitle(getPreferenceScreen().getTitle());
+            }
+
+            mCtsEnabled = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED, mContextualSearchDefValue ? 1 : 0) == 1;
+
+            mCtsPref = (SwitchPreferenceCompat) findPreference(CTS_KEY);
+            if (!AssistUtils.newInstance(mContext).isContextualSearchIntentAvailable()) {
+                getPreferenceScreen().removePreference(mCtsPref);
+            } else {
+                mCtsPref.setChecked(mCtsEnabled);
             }
         }
 
