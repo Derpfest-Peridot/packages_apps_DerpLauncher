@@ -22,6 +22,7 @@ import android.app.ActivityManager;
 import android.app.ActivityManager.RunningTaskInfo;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -30,7 +31,6 @@ import com.android.launcher3.R;
 import com.android.quickstep.util.ImageActionUtils;
 import com.android.launcher3.util.ResourceBasedOverride;
 import com.android.launcher3.util.VibratorWrapper;
-import com.android.launcher3.Utilities;
 import com.android.quickstep.NavHandle;
 import com.android.quickstep.TopTaskTracker;
 
@@ -40,6 +40,7 @@ import com.android.systemui.shared.system.ActivityManagerWrapper;
 import java.util.List;
 
 import com.android.internal.util.android.VibrationUtils;
+import com.android.internal.util.derp.derpUtils;
 
 /**
  * Class for extending nav handle long press behavior
@@ -47,6 +48,7 @@ import com.android.internal.util.android.VibrationUtils;
 public class NavHandleLongPressHandler implements ResourceBasedOverride {
 
     private final String TAG = "NavHandleLongPressHandler";
+    private final String VELVET_PKG = "com.google.android.googlequicksearchbox";
     private boolean DEBUG = false;
 
     private ThumbnailData mThumbnailData;
@@ -71,8 +73,7 @@ public class NavHandleLongPressHandler implements ResourceBasedOverride {
      * @param navHandle to handle this long press
      */
     public @Nullable Runnable getLongPressRunnable(NavHandle navHandle) {
-	    if (!Utilities.isGSAEnabled(mContext) ||
-            !Utilities.isLongPressToSearchEnabled(mContext)) {
+        if (!isLongPressSearchEnabled()) {
             return null;
         }
         updateThumbnail();
@@ -94,9 +95,16 @@ public class NavHandleLongPressHandler implements ResourceBasedOverride {
     public void onTouchStarted(NavHandle navHandle) {
         updateThumbnail();
     }
+    
+    private boolean isLongPressSearchEnabled() {
+        boolean searchEnabled = Settings.Secure.getInt(
+            mContext.getContentResolver(), "search_press_hold_nav_handle_enabled", 1) == 1;
+        boolean velvelInstalled = derpUtils.isPackageInstalled(mContext, VELVET_PKG);
+        return searchEnabled && velvelInstalled;
+    }
 
     private void updateThumbnail() {
-	if (!Utilities.isGSAEnabled(mContext)) {
+        if (!isLongPressSearchEnabled()) {
             return;
         }
         String runningPackage = mTopTaskTracker.getCachedTopTask(
